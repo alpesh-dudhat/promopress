@@ -1,10 +1,13 @@
 // Mockup domain types.
 // A Mockup is one customer's logo placed onto one product/color/view,
 // replacing the manually-built .cdr/PDF file in the old workflow.
+//
+// These string unions mirror exactly what's stored in the DB (see
+// prisma/schema.prisma) since SQLite has no native enum type.
 
 import type { DecorationType } from "@/features/products/types";
 
-export type MockupStatus = "draft" | "pending-approval" | "approved" | "rejected";
+export type MockupStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
 
 export interface MockupPlacement {
   zoneId: string;

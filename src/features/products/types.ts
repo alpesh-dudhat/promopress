@@ -2,8 +2,11 @@
 // A Product is a garment style (e.g. "Classic Polo Shirt").
 // Each Product has one or more colors, and each color has one or more views
 // (front/back/sleeve) that a logo can be placed on.
+//
+// These string unions mirror exactly what's stored in the DB (see
+// prisma/schema.prisma) since SQLite has no native enum type.
 
-export type DecorationType = "print" | "embroidery";
+export type DecorationType = "PRINT" | "EMBROIDERY";
 
 export interface PrintZone {
   id: string;
