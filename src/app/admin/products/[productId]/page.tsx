@@ -5,6 +5,9 @@ import { addProductColor, addProductView, getProductDetail } from "@/features/pr
 
 const VIEW_NAMES = ["front", "back", "left-sleeve", "right-sleeve"] as const;
 
+// Reads live database state — must not be statically prerendered.
+export const dynamic = "force-dynamic";
+
 export default async function ProductDetailPage({
   params,
 }: {

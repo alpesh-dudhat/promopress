@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { createProduct, listProducts } from "@/features/products/actions";
 
+// This page reads live, frequently-changing data from the database, so it
+// must never be statically prerendered at build time.
+export const dynamic = "force-dynamic";
+
 export default async function ProductsPage() {
   const products = await listProducts();
 

@@ -4,6 +4,9 @@ import { getViewDetail } from "@/features/products/actions";
 import { ZoneEditor } from "@/features/products/components/ZoneEditor";
 import type { DecorationType } from "@/features/products/types";
 
+// Reads live database state — must not be statically prerendered.
+export const dynamic = "force-dynamic";
+
 export default async function ViewDetailPage({
   params,
 }: {
