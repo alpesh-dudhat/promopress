@@ -49,5 +49,12 @@ next-env.d.ts
 /dev.db
 /prisma/dev.db
 
+# disposable e2e test database and Playwright artifacts
+/test.db
+/test.db-journal
+/test-results/
+/playwright-report/
+/blob-report/
+
 # user-uploaded product images (not source code)
 /public/uploads/

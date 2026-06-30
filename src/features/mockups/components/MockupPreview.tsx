@@ -2,6 +2,8 @@
 // to (front/back/etc, derived from each placement's zone) and renders one
 // product image per view with its logo placement(s) drawn on top.
 
+import { absolutePlacementRect } from "@/features/mockups/placement-math";
+
 interface Placement {
   logoUrl: string;
   xPct: number;
@@ -36,10 +38,7 @@ export function MockupPreview({ placements }: { placements: Placement[] }) {
             {/* eslint-disable-next-line @next/next/no-img-element -- size is dictated by the container, not known up front */}
             <img src={imageUrl} alt={`Mockup preview — ${name}`} className="block w-full" />
             {items.map((p, i) => {
-              const absXPct = p.zone.xPct + (p.xPct / 100) * p.zone.widthPct;
-              const absYPct = p.zone.yPct + (p.yPct / 100) * p.zone.heightPct;
-              const absWidthPct = (p.widthPct / 100) * p.zone.widthPct;
-              const absHeightPct = (p.heightPct / 100) * p.zone.heightPct;
+              const abs = absolutePlacementRect(p, p.zone);
               return (
                 // eslint-disable-next-line @next/next/no-img-element -- composited at an arbitrary runtime position/size
                 <img
@@ -48,10 +47,10 @@ export function MockupPreview({ placements }: { placements: Placement[] }) {
                   alt="Logo"
                   className="absolute"
                   style={{
-                    left: `${absXPct}%`,
-                    top: `${absYPct}%`,
-                    width: `${absWidthPct}%`,
-                    height: `${absHeightPct}%`,
+                    left: `${abs.xPct}%`,
+                    top: `${abs.yPct}%`,
+                    width: `${abs.widthPct}%`,
+                    height: `${abs.heightPct}%`,
                   }}
                 />
               );

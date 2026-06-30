@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { createMockup, listProductsForMockupBuilder } from "@/features/mockups/actions";
+import { absolutePlacementRect, clamp, logoHeightPct } from "@/features/mockups/placement-math";
 import type { DecorationType } from "@/features/products/types";
 
 type Catalog = Awaited<ReturnType<typeof listProductsForMockupBuilder>>;
@@ -24,10 +25,6 @@ interface PendingPlacement {
   posYPct: number;
   widthPct: number;
   heightPct: number;
-}
-
-function clamp(value: number, max: number) {
-  return Math.min(Math.max(value, 0), Math.max(max, 0));
 }
 
 export function MockupBuilder({ catalog }: { catalog: Catalog }) {
@@ -62,9 +59,7 @@ export function MockupBuilder({ catalog }: { catalog: Catalog }) {
   const [error, setError] = useState<string | null>(null);
   const logoFileInputRef = useRef<HTMLInputElement>(null);
 
-  const heightPct = zone
-    ? (widthPct * (zone.widthPct / zone.heightPct) * imageAspect) / logoAspect
-    : 0;
+  const heightPct = zone ? logoHeightPct(widthPct, zone, imageAspect, logoAspect) : 0;
 
   function handleProductChange(id: string) {
     setProductId(id);
@@ -143,9 +138,7 @@ export function MockupBuilder({ catalog }: { catalog: Catalog }) {
   }
 
   function handleWidthChange(value: number) {
-    const newHeightPct = zone
-      ? (value * (zone.widthPct / zone.heightPct) * imageAspect) / logoAspect
-      : 0;
+    const newHeightPct = zone ? logoHeightPct(value, zone, imageAspect, logoAspect) : 0;
     setWidthPct(value);
     setPosXPct((x) => clamp(x, 100 - value));
     setPosYPct((y) => clamp(y, 100 - newHeightPct));
@@ -439,10 +432,10 @@ function ZoneCanvas({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const absXPct = zone.xPct + (posXPct / 100) * zone.widthPct;
-  const absYPct = zone.yPct + (posYPct / 100) * zone.heightPct;
-  const absWidthPct = (widthPct / 100) * zone.widthPct;
-  const absHeightPct = (heightPct / 100) * zone.heightPct;
+  const abs = absolutePlacementRect(
+    { xPct: posXPct, yPct: posYPct, widthPct, heightPct },
+    zone
+  );
 
   return (
     <div
@@ -471,10 +464,10 @@ function ZoneCanvas({
           onMouseDown={(e) => containerRef.current && onLogoMouseDown(e, containerRef.current)}
           className="absolute cursor-grab"
           style={{
-            left: `${absXPct}%`,
-            top: `${absYPct}%`,
-            width: `${absWidthPct}%`,
-            height: `${absHeightPct}%`,
+            left: `${abs.xPct}%`,
+            top: `${abs.yPct}%`,
+            width: `${abs.widthPct}%`,
+            height: `${abs.heightPct}%`,
           }}
         />
       )}

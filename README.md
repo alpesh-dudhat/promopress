@@ -24,4 +24,12 @@ to create an admin, by design.
 - `npm run dev` — start the dev server
 - `npm run build` — production build
 - `npm run lint` / `npm run typecheck` — checks also run in CI
+- `npm run test:unit` — Vitest unit tests (pure logic, e.g. the logo
+  placement math in `src/features/mockups/placement-math.ts`)
+- `npm run test:e2e` — Playwright tests that drive a real browser against
+  a disposable `test.db` (auto-created/migrated/seeded, never touches your
+  local `dev.db`). Auto-starts the dev server, so just run it directly.
 - `npx prisma studio` — browse/edit the local SQLite database
+
+All four checks (lint, typecheck, build, both test suites) run in CI on
+every push.
