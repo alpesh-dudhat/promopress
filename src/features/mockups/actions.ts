@@ -6,7 +6,7 @@ import path from "path";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { getSystemUserId } from "@/lib/auth-stub";
+import { requireUser } from "@/lib/auth";
 import type { MockupStatus } from "@/features/mockups/types";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "logos");
@@ -55,6 +55,7 @@ export async function getMockup(id: string) {
 }
 
 export async function createMockup(formData: FormData) {
+  const user = await requireUser();
   const salesOrderRef = String(formData.get("salesOrderRef") ?? "").trim();
   const productId = String(formData.get("productId") ?? "");
   const productColorId = String(formData.get("productColorId") ?? "");
@@ -88,7 +89,6 @@ export async function createMockup(formData: FormData) {
   }
 
   const logoUrl = await saveLogo(logo);
-  const createdById = await getSystemUserId();
 
   const mockup = await db.mockup.create({
     data: {
@@ -96,7 +96,7 @@ export async function createMockup(formData: FormData) {
       productId,
       productColorId,
       productViewId,
-      createdById,
+      createdById: user.id,
       placements: {
         create: {
           zoneId,
@@ -116,6 +116,7 @@ export async function createMockup(formData: FormData) {
 }
 
 export async function setMockupStatus(id: string, status: MockupStatus) {
+  await requireUser();
   await db.mockup.update({ where: { id }, data: { status } });
   revalidatePath(`/mockups/${id}`);
   revalidatePath("/mockups");

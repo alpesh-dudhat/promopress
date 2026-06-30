@@ -6,6 +6,7 @@ import path from "path";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { requireAdmin } from "@/lib/auth";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "products");
 
@@ -48,6 +49,7 @@ export async function getViewDetail(viewId: string) {
 }
 
 export async function createProduct(formData: FormData) {
+  await requireAdmin();
   const name = String(formData.get("name") ?? "").trim();
   const category = String(formData.get("category") ?? "").trim();
   if (!name || !category) {
@@ -60,6 +62,7 @@ export async function createProduct(formData: FormData) {
 }
 
 export async function addProductColor(formData: FormData) {
+  await requireAdmin();
   const productId = String(formData.get("productId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   const hex = String(formData.get("hex") ?? "").trim();
@@ -72,6 +75,7 @@ export async function addProductColor(formData: FormData) {
 }
 
 export async function addProductView(formData: FormData) {
+  await requireAdmin();
   const productId = String(formData.get("productId") ?? "");
   const productColorId = String(formData.get("productColorId") ?? "");
   const name = String(formData.get("name") ?? "");
@@ -87,6 +91,7 @@ export async function addProductView(formData: FormData) {
 }
 
 export async function addPrintZone(formData: FormData) {
+  await requireAdmin();
   const productId = String(formData.get("productId") ?? "");
   const productViewId = String(formData.get("productViewId") ?? "");
   const label = String(formData.get("label") ?? "").trim();
@@ -126,6 +131,7 @@ export async function addPrintZone(formData: FormData) {
 }
 
 export async function deletePrintZone(zoneId: string, productId: string, productViewId: string) {
+  await requireAdmin();
   await db.printZone.delete({ where: { id: zoneId } });
   revalidatePath(`/admin/products/${productId}/views/${productViewId}`);
 }
