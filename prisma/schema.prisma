@@ -52,7 +52,6 @@ model ProductView {
   productColorId String
   productColor   ProductColor @relation(fields: [productColorId], references: [id], onDelete: Cascade)
   zones          PrintZone[]
-  mockups        Mockup[]
 }
 
 model PrintZone {
@@ -78,12 +77,13 @@ model Mockup {
   status        String   @default("DRAFT") // "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED"
   createdAt     DateTime @default(now())
 
+  // No productViewId here: a mockup can have placements on multiple views
+  // of the same product/color (e.g. front + back). The view a placement
+  // belongs to is implied by its zone (zone -> productView).
   productId      String
   product        Product      @relation(fields: [productId], references: [id])
   productColorId String
   productColor   ProductColor @relation(fields: [productColorId], references: [id])
-  productViewId  String
-  productView    ProductView  @relation(fields: [productViewId], references: [id])
 
   createdById String
   createdBy   User   @relation(fields: [createdById], references: [id])

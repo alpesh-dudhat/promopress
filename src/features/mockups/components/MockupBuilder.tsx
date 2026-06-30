@@ -10,7 +10,28 @@ type CatalogColor = CatalogProduct["colors"][number];
 type CatalogView = CatalogColor["views"][number];
 type CatalogZone = CatalogView["zones"][number];
 
+interface PendingPlacement {
+  key: string;
+  viewId: string;
+  viewName: string;
+  viewImageUrl: string;
+  zoneId: string;
+  zoneLabel: string;
+  decorationType: DecorationType;
+  logoFile: File;
+  previewUrl: string;
+  posXPct: number;
+  posYPct: number;
+  widthPct: number;
+  heightPct: number;
+}
+
+function clamp(value: number, max: number) {
+  return Math.min(Math.max(value, 0), Math.max(max, 0));
+}
+
 export function MockupBuilder({ catalog }: { catalog: Catalog }) {
+  const [salesOrderRef, setSalesOrderRef] = useState("");
   const [productId, setProductId] = useState(catalog[0]?.id ?? "");
   const product = catalog.find((p) => p.id === productId);
 
@@ -24,32 +45,35 @@ export function MockupBuilder({ catalog }: { catalog: Catalog }) {
   const zone = view?.zones.find((z: CatalogZone) => z.id === zoneId) ?? view?.zones[0];
 
   const decorationOptions = zone ? (zone.decorationTypes.split(",") as DecorationType[]) : [];
+  const [decorationType, setDecorationType] = useState<DecorationType | "">(decorationOptions[0] ?? "");
 
-  // Logo placement, expressed relative to the zone (0-100 = zone's own bounds).
+  // Current (not-yet-added) placement being positioned.
   const [posXPct, setPosXPct] = useState(25);
   const [posYPct, setPosYPct] = useState(25);
   const [widthPct, setWidthPct] = useState(50);
-  const [logoAspect, setLogoAspect] = useState(1); // naturalWidth / naturalHeight
+  const [logoAspect, setLogoAspect] = useState(1);
   const [imageAspect, setImageAspect] = useState(1);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
 
-  // The logo's height-as-%-of-zone-height, derived (not stored) so it always
-  // reflects the logo's true aspect ratio regardless of the zone's own shape.
-  const heightPct = zone
-    ? widthPct * (zone.widthPct / zone.heightPct) * imageAspect / logoAspect
-    : 0;
+  const [pendingPlacements, setPendingPlacements] = useState<PendingPlacement[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
 
-  function clamp(value: number, max: number) {
-    return Math.min(Math.max(value, 0), Math.max(max, 0));
-  }
+  const heightPct = zone
+    ? (widthPct * (zone.widthPct / zone.heightPct) * imageAspect) / logoAspect
+    : 0;
 
   function handleProductChange(id: string) {
     setProductId(id);
     const p = catalog.find((c) => c.id === id);
-    setColorId(p?.colors[0]?.id ?? "");
-    setViewId(p?.colors[0]?.views[0]?.id ?? "");
-    setZoneId(p?.colors[0]?.views[0]?.zones[0]?.id ?? "");
+    const firstColor = p?.colors[0];
+    setColorId(firstColor?.id ?? "");
+    setViewId(firstColor?.views[0]?.id ?? "");
+    setZoneId(firstColor?.views[0]?.zones[0]?.id ?? "");
+    setDecorationType((firstColor?.views[0]?.zones[0]?.decorationTypes.split(",")[0] as DecorationType) ?? "");
   }
 
   function handleColorChange(id: string) {
@@ -57,16 +81,28 @@ export function MockupBuilder({ catalog }: { catalog: Catalog }) {
     const c = product?.colors.find((col: CatalogColor) => col.id === id);
     setViewId(c?.views[0]?.id ?? "");
     setZoneId(c?.views[0]?.zones[0]?.id ?? "");
+    setDecorationType((c?.views[0]?.zones[0]?.decorationTypes.split(",")[0] as DecorationType) ?? "");
   }
 
   function handleViewChange(id: string) {
     setViewId(id);
     const v = color?.views.find((vw: CatalogView) => vw.id === id);
     setZoneId(v?.zones[0]?.id ?? "");
+    setDecorationType((v?.zones[0]?.decorationTypes.split(",")[0] as DecorationType) ?? "");
+  }
+
+  function handleZoneChange(id: string) {
+    setZoneId(id);
+    const z = view?.zones.find((zn: CatalogZone) => zn.id === id);
+    setDecorationType((z?.decorationTypes.split(",")[0] as DecorationType) ?? "");
   }
 
   function handleLogoFile(file: File | null) {
-    if (!file) return;
+    setLogoFile(file);
+    if (!file) {
+      setLogoPreviewUrl(null);
+      return;
+    }
     const url = URL.createObjectURL(file);
     setLogoPreviewUrl(url);
     const img = new Image();
@@ -108,11 +144,92 @@ export function MockupBuilder({ catalog }: { catalog: Catalog }) {
 
   function handleWidthChange(value: number) {
     const newHeightPct = zone
-      ? value * (zone.widthPct / zone.heightPct) * imageAspect / logoAspect
+      ? (value * (zone.widthPct / zone.heightPct) * imageAspect) / logoAspect
       : 0;
     setWidthPct(value);
     setPosXPct((x) => clamp(x, 100 - value));
     setPosYPct((y) => clamp(y, 100 - newHeightPct));
+  }
+
+  function resetCurrentLogo() {
+    setLogoFile(null);
+    setLogoPreviewUrl(null);
+    setPosXPct(25);
+    setPosYPct(25);
+    setWidthPct(50);
+    if (logoFileInputRef.current) logoFileInputRef.current.value = "";
+  }
+
+  function addPlacement() {
+    if (!view || !zone || !decorationType || !logoFile || !logoPreviewUrl) {
+      setError("Pick a view, zone, decoration type, and logo file before adding.");
+      return;
+    }
+    setError(null);
+    setPendingPlacements((prev) => [
+      ...prev,
+      {
+        key: `${zone.id}-${Date.now()}`,
+        viewId: view.id,
+        viewName: view.name,
+        viewImageUrl: view.imageUrl,
+        zoneId: zone.id,
+        zoneLabel: zone.label,
+        decorationType,
+        logoFile,
+        previewUrl: logoPreviewUrl,
+        posXPct,
+        posYPct,
+        widthPct,
+        heightPct,
+      },
+    ]);
+    resetCurrentLogo();
+  }
+
+  function removePlacement(key: string) {
+    setPendingPlacements((prev) => prev.filter((p) => p.key !== key));
+  }
+
+  async function handleSave() {
+    if (!salesOrderRef.trim()) {
+      setError("Sales order ref is required.");
+      return;
+    }
+    if (pendingPlacements.length === 0) {
+      setError("Add at least one logo placement before saving.");
+      return;
+    }
+    setError(null);
+    setSubmitting(true);
+    try {
+      const fd = new FormData();
+      fd.set("salesOrderRef", salesOrderRef);
+      fd.set("productId", productId);
+      fd.set("productColorId", colorId);
+      fd.set(
+        "placementsMeta",
+        JSON.stringify(
+          pendingPlacements.map((p) => ({
+            zoneId: p.zoneId,
+            decorationType: p.decorationType,
+            xPct: p.posXPct,
+            yPct: p.posYPct,
+            widthPct: p.widthPct,
+            heightPct: p.heightPct,
+          }))
+        )
+      );
+      pendingPlacements.forEach((p, i) => fd.set(`logo_${i}`, p.logoFile));
+      await createMockup(fd);
+    } catch (err) {
+      const digest = (err as { digest?: unknown } | null)?.digest;
+      if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) {
+        throw err; // successful save — let Next.js perform the redirect
+      }
+      setSubmitting(false);
+      setError(err instanceof Error ? err.message : "Failed to save mockup.");
+    }
   }
 
   if (!product || !color || !view || !zone) {
@@ -124,11 +241,16 @@ export function MockupBuilder({ catalog }: { catalog: Catalog }) {
   }
 
   return (
-    <form action={createMockup} className="flex flex-col gap-6 md:flex-row">
+    <div className="flex flex-col gap-6 md:flex-row">
       <div className="flex w-full flex-col gap-3 md:w-64">
         <label className="flex flex-col gap-1 text-sm">
           Sales order ref
-          <input name="salesOrderRef" required className="rounded border px-2 py-1" />
+          <input
+            value={salesOrderRef}
+            onChange={(e) => setSalesOrderRef(e.target.value)}
+            required
+            className="rounded border px-2 py-1"
+          />
         </label>
 
         <label className="flex flex-col gap-1 text-sm">
@@ -180,7 +302,7 @@ export function MockupBuilder({ catalog }: { catalog: Catalog }) {
           Print zone
           <select
             value={zoneId}
-            onChange={(e) => setZoneId(e.target.value)}
+            onChange={(e) => handleZoneChange(e.target.value)}
             className="rounded border px-2 py-1"
           >
             {view.zones.map((z: CatalogZone) => (
@@ -193,7 +315,11 @@ export function MockupBuilder({ catalog }: { catalog: Catalog }) {
 
         <label className="flex flex-col gap-1 text-sm">
           Decoration type
-          <select name="decorationType" className="rounded border px-2 py-1">
+          <select
+            value={decorationType}
+            onChange={(e) => setDecorationType(e.target.value as DecorationType)}
+            className="rounded border px-2 py-1"
+          >
             {decorationOptions.map((d) => (
               <option key={d} value={d}>
                 {d}
@@ -205,10 +331,9 @@ export function MockupBuilder({ catalog }: { catalog: Catalog }) {
         <label className="flex flex-col gap-1 text-sm">
           Logo file
           <input
+            ref={logoFileInputRef}
             type="file"
-            name="logo"
             accept="image/*"
-            required
             onChange={(e) => handleLogoFile(e.target.files?.[0] ?? null)}
           />
         </label>
@@ -230,17 +355,46 @@ export function MockupBuilder({ catalog }: { catalog: Catalog }) {
           {((heightPct / 100) * zone.maxHeightCm).toFixed(1)}cm.
         </p>
 
-        <input type="hidden" name="productId" value={productId} />
-        <input type="hidden" name="productColorId" value={colorId} />
-        <input type="hidden" name="productViewId" value={viewId} />
-        <input type="hidden" name="zoneId" value={zoneId} />
-        <input type="hidden" name="xPct" value={posXPct} />
-        <input type="hidden" name="yPct" value={posYPct} />
-        <input type="hidden" name="widthPct" value={widthPct} />
-        <input type="hidden" name="heightPct" value={heightPct} />
+        <button
+          type="button"
+          onClick={addPlacement}
+          className="rounded border px-4 py-2 text-sm"
+        >
+          + Add this placement
+        </button>
 
-        <button type="submit" className="rounded bg-black px-4 py-2 text-white">
-          Save mockup
+        <div className="flex flex-col gap-2 border-t pt-3">
+          <h3 className="text-sm font-medium">
+            Placements to save ({pendingPlacements.length})
+          </h3>
+          {pendingPlacements.length === 0 && (
+            <p className="text-xs text-zinc-500">None added yet.</p>
+          )}
+          {pendingPlacements.map((p) => (
+            <div key={p.key} className="flex items-center justify-between rounded border p-2 text-xs">
+              <span>
+                {p.viewName} · {p.zoneLabel} · {p.decorationType}
+              </span>
+              <button
+                type="button"
+                onClick={() => removePlacement(p.key)}
+                className="text-red-600"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
+
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={submitting}
+          className="rounded bg-black px-4 py-2 text-white disabled:opacity-50"
+        >
+          {submitting ? "Saving..." : "Save mockup"}
         </button>
       </div>
 
@@ -256,7 +410,7 @@ export function MockupBuilder({ catalog }: { catalog: Catalog }) {
         onLogoMouseDown={onLogoMouseDown}
         dragging={dragging}
       />
-    </form>
+    </div>
   );
 }
 

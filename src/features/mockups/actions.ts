@@ -48,9 +48,46 @@ export async function getMockup(id: string) {
     include: {
       product: true,
       productColor: true,
-      productView: true,
-      placements: { include: { zone: true } },
+      placements: { include: { zone: { include: { productView: true } } } },
     },
+  });
+}
+
+interface PlacementInput {
+  zoneId: string;
+  decorationType: string;
+  xPct: number;
+  yPct: number;
+  widthPct: number;
+  heightPct: number;
+}
+
+function parsePlacementsMeta(raw: string): PlacementInput[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("Malformed placements data.");
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new Error("At least one logo placement is required.");
+  }
+  return parsed.map((p) => {
+    if (
+      typeof p !== "object" ||
+      p === null ||
+      typeof (p as PlacementInput).zoneId !== "string" ||
+      typeof (p as PlacementInput).decorationType !== "string" ||
+      [
+        (p as PlacementInput).xPct,
+        (p as PlacementInput).yPct,
+        (p as PlacementInput).widthPct,
+        (p as PlacementInput).heightPct,
+      ].some((n) => typeof n !== "number" || Number.isNaN(n))
+    ) {
+      throw new Error("Malformed placement entry.");
+    }
+    return p as PlacementInput;
   });
 }
 
@@ -59,55 +96,63 @@ export async function createMockup(formData: FormData) {
   const salesOrderRef = String(formData.get("salesOrderRef") ?? "").trim();
   const productId = String(formData.get("productId") ?? "");
   const productColorId = String(formData.get("productColorId") ?? "");
-  const productViewId = String(formData.get("productViewId") ?? "");
-  const zoneId = String(formData.get("zoneId") ?? "");
-  const decorationType = String(formData.get("decorationType") ?? "");
-  const logo = formData.get("logo") as File | null;
+  const placementsMetaRaw = String(formData.get("placementsMeta") ?? "");
 
-  const xPct = Number(formData.get("xPct"));
-  const yPct = Number(formData.get("yPct"));
-  const widthPct = Number(formData.get("widthPct"));
-  const heightPct = Number(formData.get("heightPct"));
-
-  if (
-    !salesOrderRef ||
-    !productId ||
-    !productColorId ||
-    !productViewId ||
-    !zoneId ||
-    !decorationType ||
-    !logo ||
-    logo.size === 0 ||
-    [xPct, yPct, widthPct, heightPct].some(Number.isNaN)
-  ) {
-    throw new Error("All fields, including a logo file, are required.");
+  if (!salesOrderRef || !productId || !productColorId || !placementsMetaRaw) {
+    throw new Error("Sales order ref, product, color, and at least one placement are required.");
   }
 
-  const zone = await db.printZone.findUnique({ where: { id: zoneId } });
-  if (!zone || !zone.decorationTypes.split(",").includes(decorationType)) {
-    throw new Error("Selected decoration type isn't allowed for this print zone.");
-  }
+  const placementsInput = parsePlacementsMeta(placementsMetaRaw);
 
-  const logoUrl = await saveLogo(logo);
+  // Validate every zone exists, belongs to this product/color, and allows
+  // the chosen decoration type — and collect the matching logo file.
+  const placementsData: {
+    zoneId: string;
+    logoUrl: string;
+    decorationType: string;
+    xPct: number;
+    yPct: number;
+    widthPct: number;
+    heightPct: number;
+  }[] = [];
+
+  for (let i = 0; i < placementsInput.length; i++) {
+    const p = placementsInput[i];
+    const logo = formData.get(`logo_${i}`) as File | null;
+    if (!logo || logo.size === 0) {
+      throw new Error(`Missing logo file for placement ${i + 1}.`);
+    }
+
+    const zone = await db.printZone.findUnique({
+      where: { id: p.zoneId },
+      include: { productView: true },
+    });
+    if (!zone || zone.productView.productColorId !== productColorId) {
+      throw new Error("A selected print zone doesn't belong to this product/color.");
+    }
+    if (!zone.decorationTypes.split(",").includes(p.decorationType)) {
+      throw new Error("Selected decoration type isn't allowed for one of the chosen print zones.");
+    }
+
+    const logoUrl = await saveLogo(logo);
+    placementsData.push({
+      zoneId: p.zoneId,
+      logoUrl,
+      decorationType: p.decorationType,
+      xPct: p.xPct,
+      yPct: p.yPct,
+      widthPct: p.widthPct,
+      heightPct: p.heightPct,
+    });
+  }
 
   const mockup = await db.mockup.create({
     data: {
       salesOrderRef,
       productId,
       productColorId,
-      productViewId,
       createdById: user.id,
-      placements: {
-        create: {
-          zoneId,
-          logoUrl,
-          decorationType,
-          xPct,
-          yPct,
-          widthPct,
-          heightPct,
-        },
-      },
+      placements: { create: placementsData },
     },
   });
 

@@ -26,7 +26,7 @@ export default async function MockupDetailPage({
       <h1 className="mt-2 text-2xl font-semibold">{mockup.salesOrderRef}</h1>
 
       <div className="mt-6 flex flex-col gap-6 md:flex-row">
-        <MockupPreview imageUrl={mockup.productView.imageUrl} placements={mockup.placements} />
+        <MockupPreview placements={mockup.placements} />
 
         <div className="flex w-full flex-col gap-3 md:w-64">
           <table className="text-sm">
@@ -39,13 +39,11 @@ export default async function MockupDetailPage({
                 <td className="pr-3 font-medium">Color</td>
                 <td>{mockup.productColor.name}</td>
               </tr>
-              <tr>
-                <td className="pr-3 font-medium">View</td>
-                <td>{mockup.productView.name}</td>
-              </tr>
               {mockup.placements.map((p) => (
                 <tr key={p.id}>
-                  <td className="pr-3 font-medium">{p.zone.label}</td>
+                  <td className="pr-3 font-medium">
+                    {p.zone.productView.name} · {p.zone.label}
+                  </td>
                   <td>
                     {p.decorationType} ·{" "}
                     {((p.widthPct / 100) * p.zone.maxWidthCm).toFixed(1)}cm x{" "}
