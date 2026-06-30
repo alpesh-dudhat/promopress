@@ -1,0 +1,108 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// NOTE: SQLite has no native enum or array type, so fields that would be
+// enums/arrays in Postgres are plain Strings here. Allowed values are
+// enforced by the TypeScript union types in src/features/*/types.ts.
+// decorationTypes is stored comma-separated (e.g. "PRINT,EMBROIDERY").
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String // hashed, never plain text
+  role      String // "ADMIN" | "SALES" | "CUSTOMER"
+  createdAt DateTime @default(now())
+  mockups   Mockup[]
+}
+
+model Product {
+  id        String         @id @default(cuid())
+  name      String
+  category  String
+  createdAt DateTime       @default(now())
+  colors    ProductColor[]
+  mockups   Mockup[]
+}
+
+model ProductColor {
+  id        String        @id @default(cuid())
+  name      String
+  hex       String
+  productId String
+  product   Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  views     ProductView[]
+  mockups   Mockup[]
+}
+
+model ProductView {
+  id             String       @id @default(cuid())
+  // front / back / left-sleeve / right-sleeve
+  name           String
+  imageUrl       String
+  productColorId String
+  productColor   ProductColor @relation(fields: [productColorId], references: [id], onDelete: Cascade)
+  zones          PrintZone[]
+  mockups        Mockup[]
+}
+
+model PrintZone {
+  id              String            @id @default(cuid())
+  label           String // e.g. "Left Chest", "Full Back"
+  decorationTypes String // comma-separated: "PRINT" | "EMBROIDERY"
+  // position/size as % of the product image
+  xPct            Float
+  yPct            Float
+  widthPct        Float
+  heightPct       Float
+  // real-world max size in cm, shown on the spec sheet
+  maxWidthCm      Float
+  maxHeightCm     Float
+  productViewId   String
+  productView     ProductView       @relation(fields: [productViewId], references: [id], onDelete: Cascade)
+  placements      MockupPlacement[]
+}
+
+model Mockup {
+  id            String   @id @default(cuid())
+  salesOrderRef String // free-text Odoo sales order number for now
+  status        String   @default("DRAFT") // "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED"
+  createdAt     DateTime @default(now())
+
+  productId      String
+  product        Product      @relation(fields: [productId], references: [id])
+  productColorId String
+  productColor   ProductColor @relation(fields: [productColorId], references: [id])
+  productViewId  String
+  productView    ProductView  @relation(fields: [productViewId], references: [id])
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id])
+
+  placements MockupPlacement[]
+}
+
+model MockupPlacement {
+  id             String @id @default(cuid())
+  logoUrl        String
+  decorationType String // "PRINT" | "EMBROIDERY"
+  // logo position/size within the zone, as % of the zone's bounds
+  xPct           Float
+  yPct           Float
+  widthPct       Float
+  heightPct      Float
+
+  zoneId   String
+  zone     PrintZone @relation(fields: [zoneId], references: [id])
+  mockupId String
+  mockup   Mockup    @relation(fields: [mockupId], references: [id], onDelete: Cascade)
+}
